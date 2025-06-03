@@ -14,7 +14,7 @@ This is a simple e-commerce web application for a local store. Users can browse 
 ## Technologies Used
 
 - Backend: Node.js, Express.js
-- Frontend: HTML, CSS, JavaScript (Vanilla JS)
+- Frontend: HTML, CSS, JavaScript (Node JS)
 - Data storage: In-memory arrays (for demo purposes)
 
 ## Getting Started
