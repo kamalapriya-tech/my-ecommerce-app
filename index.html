@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Local Store E-commerce</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .product, .cart-item { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+    img { width: 150px; }
+    #cart { margin-top: 10px; }
+    #filters { margin-bottom: 15px; }
+    .cart-qty { width: 40px; }
+    button { cursor: pointer; }
+  </style>
+</head>
+<body>
+
+<h1>Local Store Products</h1>
+
+<div id="filters">
+  <label for="categoryFilter">Filter by Category: </label>
+  <select id="categoryFilter" onchange="fetchAndDisplayProducts()">
+    <option value="all">All</option>
+  </select>
+
+  &nbsp;&nbsp;&nbsp;
+
+  <label for="sortPrice">Sort by Price: </label>
+  <select id="sortPrice" onchange="fetchAndDisplayProducts()">
+    <option value="none">None</option>
+    <option value="price_asc">Low to High</option>
+    <option value="price_desc">High to Low</option>
+  </select>
+</div>
+
+<div id="products"></div>
+
+<h2>Shopping Cart</h2>
+<div id="cart"></div>
+
+<button onclick="calculateBill()">Calculate Bill</button>
+<p id="billTotal"></p>
+
+<script>
+  let allCategories = [];
+
+  async function fetchAndDisplayProducts() {
+    const category = document.getElementById('categoryFilter').value;
+    const sort = document.getElementById('sortPrice').value;
+
+    let query = [];
+    if (category && category !== 'all') query.push(`category=${encodeURIComponent(category)}`);
+    if (sort && sort !== 'none') query.push(`sort=${sort}`);
+    const url = `http://localhost:3000/products${query.length ? '?' + query.join('&') : ''}`;
+
+    try {
+      const res = await fetch(url);
+      const products = await res.json();
+      displayProducts(products);
+
+      // Populate category filter once
+      if (allCategories.length === 0) {
+        const categories = [...new Set(products.map(p => p.category))];
+        allCategories = categories;
+        const filter = document.getElementById('categoryFilter');
+        categories.forEach(cat => {
+          const opt = document.createElement('option');
+          opt.value = cat;
+          opt.textContent = cat;
+          filter.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error("Failed to fetch products:", err);
+    }
+  }
+
+  function displayProducts(products) {
+    const container = document.getElementById('products');
+    container.innerHTML = '';
+
+    if (!products || products.length === 0) {
+      container.innerHTML = '<p>No products found.</p>';
+      return;
+    }
+
+    products.forEach(product => {
+      const div = document.createElement('div');
+      div.className = 'product';
+      div.innerHTML = `
+        <h3>${product.name}</h3>
+        <img src="${product.image_url}" alt="${product.name}" />
+        <p>${product.description}</p>
+        <p><b>Price: $${product.price.toFixed(2)}</b></p>
+        <button onclick="addToCart(${product.id})">Add to Cart</button>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  async function addToCart(productId) {
+    try {
+      const res = await fetch('http://localhost:3000/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, quantity: 1 })
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        alert("Failed to add to cart: " + error.message);
+        return;
+      }
+      fetchCart();
+    } catch (err) {
+      console.error("Add to cart error:", err);
+    }
+  }
+
+  async function fetchCart() {
+    const res = await fetch('http://localhost:3000/cart');
+    const cart = await res.json();
+    const container = document.getElementById('cart');
+    container.innerHTML = '';
+
+    if (!cart || cart.length === 0) {
+      container.textContent = 'Your cart is empty.';
+      document.getElementById('billTotal').textContent = '';
+      return;
+    }
+
+    cart.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'cart-item';
+      div.innerHTML = `
+        <b>${item.product.name}</b> - Price: $${item.product.price.toFixed(2)} <br>
+        Quantity: <input type="number" class="cart-qty" min="0" value="${item.quantity}" onchange="updateQuantity(${item.product.id}, this.value)" />
+        <button onclick="removeFromCart(${item.product.id})">Remove</button>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  async function updateQuantity(productId, newQty) {
+    newQty = parseInt(newQty);
+    if (isNaN(newQty) || newQty < 0) {
+      alert("Quantity must be zero or positive.");
+      fetchCart(); // reset to current quantity
+      return;
+    }
+    try {
+      const res = await fetch(`http://localhost:3000/cart/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: newQty })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        alert("Failed to update quantity: " + error.message);
+      }
+      fetchCart();
+    } catch (err) {
+      console.error("Update quantity error:", err);
+    }
+  }
+
+  async function removeFromCart(productId) {
+    try {
+      const res = await fetch(`http://localhost:3000/cart/${productId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        alert("Failed to remove item: " + error.message);
+      }
+      fetchCart();
+    } catch (err) {
+      console.error("Remove from cart error:", err);
+    }
+  }
+
+  async function calculateBill() {
+    try {
+      const res = await fetch('http://localhost:3000/cart/bill');
+      if (!res.ok) throw new Error("Failed to fetch bill");
+      const data = await res.json();
+      document.getElementById('billTotal').textContent = `Total Bill: $${data.total}`;
+    } catch (err) {
+      alert("Failed to calculate bill.");
+      console.error("Bill calculation error:", err);
+    }
+  }
+
+  // Initial load
+  fetchAndDisplayProducts();
+  fetchCart();
+</script>
+
+</body>
+</html>
